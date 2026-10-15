@@ -50,6 +50,12 @@ pub enum Error {
     /// If an connection has been established but privileged gateway intents were provided without
     /// enabling them prior.
     DisallowedGatewayIntents,
+    /// When a shard that must not identify could not resume its saved session.
+    ///
+    /// See [`ResumeInfo::resume_only`].
+    ///
+    /// [`ResumeInfo::resume_only`]: super::ResumeInfo::resume_only
+    SessionNotResumable,
 }
 
 impl fmt::Display for Error {
@@ -70,6 +76,9 @@ impl fmt::Display for Error {
             Self::DisallowedGatewayIntents => {
                 f.write_str("Disallowed gateway intents were provided")
             },
+            Self::SessionNotResumable => f.write_str(
+                "The saved session could not be resumed and the shard was told not to identify",
+            ),
         }
     }
 }

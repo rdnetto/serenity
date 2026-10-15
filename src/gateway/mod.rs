@@ -248,6 +248,8 @@ pub struct ResumeInfo {
     pub seq: u64,
     /// The URL to reconnect to when resuming, as given in READY.
     pub resume_gateway_url: String,
+    /// Whether the shard gives up instead of identifying when the session cannot be resumed.
+    pub resume_only: bool,
 }
 
 impl ResumeInfo {
@@ -258,7 +260,23 @@ impl ResumeInfo {
             session_id,
             seq,
             resume_gateway_url,
+            resume_only: false,
         }
+    }
+
+    /// Makes a shard started from this [`ResumeInfo`] give up instead of identifying when the
+    /// session cannot be resumed.
+    ///
+    /// The shard then stops and [`Client::start`] returns [`GatewayError::SessionNotResumable`].
+    /// This suits a caller that only wants the replay of a saved session, for example on behalf of
+    /// another client that identifies, since a fallback IDENTIFY would open a second full session
+    /// and deliver every event twice.
+    ///
+    /// [`Client::start`]: crate::Client::start
+    #[must_use]
+    pub fn resume_only(mut self) -> Self {
+        self.resume_only = true;
+        self
     }
 }
 

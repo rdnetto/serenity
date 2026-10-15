@@ -70,6 +70,8 @@ pub struct Shard {
     session_id: Option<String>,
     /// Where to reconnect to resume the session; Discord names it in READY.
     resume_gateway_url: Option<String>,
+    /// Whether the runner should stop instead of identifying when the session cannot be resumed.
+    resume_only: bool,
     info: ShardInfo,
     stage: ConnectionStage,
     /// Instant of when the shard was started.
@@ -142,6 +144,7 @@ impl Shard {
         let heartbeat_interval = None;
         let last_heartbeat_acknowledged = true;
         let stage = ConnectionStage::Handshake;
+        let resume_only = resume.as_ref().is_some_and(|r| r.resume_only);
         let (session_id, seq, resume_gateway_url) = match resume {
             Some(r) => (Some(r.session_id), r.seq, Some(r.resume_gateway_url)),
             None => (None, 0, None),
@@ -161,10 +164,17 @@ impl Shard {
             token: token.to_string(),
             session_id,
             resume_gateway_url,
+            resume_only,
             info,
             ws_url,
             intents,
         })
+    }
+
+    /// Returns whether the shard stops instead of identifying when its session cannot be resumed.
+    #[must_use]
+    pub fn is_resume_only(&self) -> bool {
+        self.resume_only
     }
 
     /// Returns the point a new process could resume this shard's session from, once a session

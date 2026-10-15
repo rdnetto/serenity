@@ -468,6 +468,17 @@ impl ShardRunner {
 
     #[instrument(skip(self))]
     async fn request_restart(&mut self) {
+        if self.shard.is_resume_only() {
+            warn!(
+                "[ShardRunner {:?}] Session cannot be resumed and the shard must not identify; \
+                 stopping",
+                self.shard.shard_info(),
+            );
+
+            self.manager.return_with_value(Err(GatewayError::SessionNotResumable)).await;
+            return;
+        }
+
         debug!("[ShardRunner {:?}] Requesting restart", self.shard.shard_info());
 
         self.update_manager().await;
