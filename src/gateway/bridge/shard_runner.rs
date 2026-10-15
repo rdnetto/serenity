@@ -183,7 +183,7 @@ impl ShardRunner {
 
                 dispatch_model(
                     event,
-                    self.shard.resume_info(),
+                    self.shard.resume_info().as_ref(),
                     &self.make_context(),
                     #[cfg(feature = "framework")]
                     self.framework.clone(),

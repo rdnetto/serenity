@@ -285,6 +285,8 @@ impl ResumeInfo {
 pub enum ShardAction {
     Heartbeat,
     Identify,
+    /// Resume the shard's session over the current connection instead of identifying, for a shard
+    /// built with a [`ResumeInfo`] that has just received its first HELLO.
     Resume,
     Reconnect(ReconnectType),
 }

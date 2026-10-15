@@ -177,8 +177,11 @@ impl Shard {
         self.resume_only
     }
 
-    /// Returns the point a new process could resume this shard's session from, once a session
-    /// exists.
+    /// Returns the point a new process could resume this shard's session from, or [`None`] before
+    /// the shard has a session.
+    ///
+    /// The runner reads it after the shard has handled each event, so the value handed to a
+    /// `RawEventHandler` already covers that event.
     #[must_use]
     pub fn resume_info(&self) -> Option<ResumeInfo> {
         let session_id = self.session_id.clone()?;
@@ -469,6 +472,7 @@ impl Shard {
                 self.heartbeat_interval = Some(std::time::Duration::from_millis(interval));
 
                 Ok(Some(if self.stage == ConnectionStage::Handshake {
+                    // A shard built with a ResumeInfo has a session before its first HELLO.
                     if self.session_id.is_some() {
                         ShardAction::Resume
                     } else {
@@ -774,6 +778,9 @@ impl Shard {
     }
 
     /// Sends a RESUME over the current connection, which must have just received a HELLO.
+    ///
+    /// Unlike [`Self::resume`], which reconnects first, this serves a shard built with a
+    /// [`ResumeInfo`], whose first connection already goes to the resume URL.
     ///
     /// # Errors
     ///

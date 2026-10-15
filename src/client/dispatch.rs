@@ -43,10 +43,9 @@ macro_rules! update_cache {
     ($cache:ident, $event:ident) => {};
 }
 
-#[allow(clippy::needless_pass_by_value)]
 pub(crate) fn dispatch_model(
     event: Event,
-    resume_info: Option<ResumeInfo>,
+    resume_info: Option<&ResumeInfo>,
     context: &Context,
     #[cfg(feature = "framework")] framework: Option<Arc<dyn Framework>>,
     event_handlers: Vec<Arc<dyn EventHandler>>,
@@ -54,7 +53,7 @@ pub(crate) fn dispatch_model(
 ) {
     for raw_handler in raw_event_handlers {
         let (context, event) = (context.clone(), event.clone());
-        let resume_info = resume_info.clone();
+        let resume_info = resume_info.cloned();
         tokio::spawn(async move {
             match resume_info {
                 Some(resume_info) => {

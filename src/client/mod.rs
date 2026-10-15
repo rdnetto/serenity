@@ -297,7 +297,12 @@ impl ClientBuilder {
     /// Sets sessions that shards resume on their first connection instead of identifying, so a
     /// restarted process receives the events dispatched while it was down.
     ///
-    /// A stale session is rejected by Discord, in which case the shard identifies afresh.
+    /// Each session is used once: a shard that later restarts identifies afresh. A session Discord
+    /// rejects as stale makes the shard identify afresh too, unless it was marked
+    /// [`ResumeInfo::resume_only`], in which case [`Client::start`] returns
+    /// [`GatewayError::SessionNotResumable`].
+    ///
+    /// [`GatewayError::SessionNotResumable`]: crate::gateway::GatewayError::SessionNotResumable
     pub fn resume_sessions(mut self, sessions: HashMap<ShardId, ResumeInfo>) -> Self {
         self.resume_sessions = sessions;
 

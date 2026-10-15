@@ -402,5 +402,7 @@ pub struct ShardManagerOptions {
     pub http: Arc<Http>,
     pub intents: GatewayIntents,
     pub presence: Option<PresenceData>,
+    /// Sessions for shards to resume on their first start instead of identifying; see
+    /// `ClientBuilder::resume_sessions`.
     pub resume_sessions: HashMap<ShardId, ResumeInfo>,
 }

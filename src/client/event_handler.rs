@@ -511,8 +511,10 @@ pub trait RawEventHandler: Send + Sync {
     /// Dispatched when any event occurs, with the point to resume from once this event has been
     /// handled.
     ///
-    /// Defaults to calling [`Self::raw_event`]; implement this instead to persist sessions for
-    /// [`ClientBuilder::resume_sessions`].
+    /// Defaults to calling [`Self::raw_event`], which the shard no longer calls directly once it
+    /// has a session. Implement this instead to persist sessions for
+    /// [`ClientBuilder::resume_sessions`]: the resume point is captured as the event is dispatched,
+    /// so it stays exact however the handler tasks are scheduled.
     ///
     /// [`ClientBuilder::resume_sessions`]: super::ClientBuilder::resume_sessions
     async fn raw_event_with_resume_info(&self, ctx: Context, _resume_info: ResumeInfo, ev: Event) {
