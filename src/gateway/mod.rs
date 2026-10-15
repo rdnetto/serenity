@@ -236,11 +236,38 @@ impl fmt::Display for ConnectionStage {
     }
 }
 
+/// A gateway session a shard can resume instead of identifying, so a restarted process receives
+/// the events dispatched while it was down.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub struct ResumeInfo {
+    /// The ID of the session to resume, as given in READY.
+    pub session_id: String,
+    /// The sequence number of the last dispatch the process handled; Discord replays from the next
+    /// one.
+    pub seq: u64,
+    /// The URL to reconnect to when resuming, as given in READY.
+    pub resume_gateway_url: String,
+}
+
+impl ResumeInfo {
+    /// Creates a new [`ResumeInfo`] from the values of a previous session.
+    #[must_use]
+    pub fn new(session_id: String, seq: u64, resume_gateway_url: String) -> Self {
+        Self {
+            session_id,
+            seq,
+            resume_gateway_url,
+        }
+    }
+}
+
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ShardAction {
     Heartbeat,
     Identify,
+    Resume,
     Reconnect(ReconnectType),
 }
 

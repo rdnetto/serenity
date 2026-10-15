@@ -20,7 +20,7 @@ use crate::cache::Cache;
 use crate::client::{EventHandler, RawEventHandler};
 #[cfg(feature = "framework")]
 use crate::framework::Framework;
-use crate::gateway::{ConnectionStage, GatewayError, PresenceData};
+use crate::gateway::{ConnectionStage, GatewayError, PresenceData, ResumeInfo};
 use crate::http::Http;
 use crate::internal::prelude::*;
 use crate::internal::tokio::spawn_named;
@@ -160,6 +160,7 @@ impl ShardManager {
             http: opt.http,
             intents: opt.intents,
             presence: opt.presence,
+            resume_sessions: opt.resume_sessions,
         };
 
         spawn_named("shard_queuer::run", async move {
@@ -401,4 +402,5 @@ pub struct ShardManagerOptions {
     pub http: Arc<Http>,
     pub intents: GatewayIntents,
     pub presence: Option<PresenceData>,
+    pub resume_sessions: HashMap<ShardId, ResumeInfo>,
 }

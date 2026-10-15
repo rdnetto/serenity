@@ -23,6 +23,7 @@ mod error;
 #[cfg(feature = "gateway")]
 mod event_handler;
 
+use std::collections::HashMap;
 use std::future::IntoFuture;
 use std::ops::Range;
 use std::sync::Arc;
@@ -50,14 +51,14 @@ use crate::cache::Settings as CacheSettings;
 use crate::framework::Framework;
 #[cfg(feature = "voice")]
 use crate::gateway::VoiceGatewayManager;
-use crate::gateway::{ActivityData, PresenceData};
+use crate::gateway::{ActivityData, PresenceData, ResumeInfo};
 #[cfg(feature = "gateway")]
 use crate::gateway::{ShardManager, ShardManagerOptions};
 use crate::http::Http;
 use crate::internal::prelude::*;
 #[cfg(feature = "gateway")]
 use crate::model::gateway::GatewayIntents;
-use crate::model::id::ApplicationId;
+use crate::model::id::{ApplicationId, ShardId};
 use crate::model::user::OnlineStatus;
 
 /// A builder implementing [`IntoFuture`] building a [`Client`] to interact with Discord.
@@ -76,6 +77,7 @@ pub struct ClientBuilder {
     event_handlers: Vec<Arc<dyn EventHandler>>,
     raw_event_handlers: Vec<Arc<dyn RawEventHandler>>,
     presence: PresenceData,
+    resume_sessions: HashMap<ShardId, ResumeInfo>,
 }
 
 #[cfg(feature = "gateway")]
@@ -94,6 +96,7 @@ impl ClientBuilder {
             event_handlers: vec![],
             raw_event_handlers: vec![],
             presence: PresenceData::default(),
+            resume_sessions: HashMap::new(),
         }
     }
 
@@ -291,6 +294,16 @@ impl ClientBuilder {
         &self.event_handlers
     }
 
+    /// Sets sessions that shards resume on their first connection instead of identifying, so a
+    /// restarted process receives the events dispatched while it was down.
+    ///
+    /// A stale session is rejected by Discord, in which case the shard identifies afresh.
+    pub fn resume_sessions(mut self, sessions: HashMap<ShardId, ResumeInfo>) -> Self {
+        self.resume_sessions = sessions;
+
+        self
+    }
+
     /// Adds an event handler with a single method where all received gateway events will be
     /// dispatched.
     pub fn raw_event_handler<H: RawEventHandler + 'static>(mut self, raw_event_handler: H) -> Self {
@@ -339,6 +352,7 @@ impl IntoFuture for ClientBuilder {
         let raw_event_handlers = self.raw_event_handlers;
         let intents = self.intents;
         let presence = self.presence;
+        let resume_sessions = self.resume_sessions;
 
         let mut http = self.http;
 
@@ -388,6 +402,7 @@ impl IntoFuture for ClientBuilder {
                 http: Arc::clone(&http),
                 intents,
                 presence: Some(presence),
+                resume_sessions,
             });
 
             let client = Client {

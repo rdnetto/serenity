@@ -26,7 +26,7 @@ use crate::cache::Cache;
 use crate::client::{EventHandler, RawEventHandler};
 #[cfg(feature = "framework")]
 use crate::framework::Framework;
-use crate::gateway::{ConnectionStage, PresenceData, Shard, ShardRunnerMessage};
+use crate::gateway::{ConnectionStage, PresenceData, ResumeInfo, Shard, ShardRunnerMessage};
 use crate::http::Http;
 use crate::internal::prelude::*;
 use crate::internal::tokio::spawn_named;
@@ -78,6 +78,9 @@ pub struct ShardQueuer {
     pub http: Arc<Http>,
     pub intents: GatewayIntents,
     pub presence: Option<PresenceData>,
+    /// Sessions to resume when their shard first starts. An entry is removed on use, so a shard
+    /// that restarts later identifies afresh instead of retrying a stale session.
+    pub resume_sessions: HashMap<ShardId, ResumeInfo>,
 }
 
 impl ShardQueuer {
@@ -162,12 +165,15 @@ impl ShardQueuer {
     async fn start(&mut self, id: ShardId, total: u32) -> Result<()> {
         let shard_info = ShardInfo::new(id, total);
 
+        let resume = self.resume_sessions.remove(&id);
+
         let mut shard = Shard::new(
             Arc::clone(&self.ws_url),
             self.http.token(),
             shard_info,
             self.intents,
             self.presence.clone(),
+            resume,
         )
         .await?;
 

@@ -222,6 +222,7 @@ impl ShardRunner {
             ShardAction::Reconnect(ReconnectType::Resume) => self.shard.resume().await,
             ShardAction::Heartbeat => self.shard.heartbeat().await,
             ShardAction::Identify => self.shard.identify().await,
+            ShardAction::Resume => self.shard.resume_current().await,
         }
     }
 

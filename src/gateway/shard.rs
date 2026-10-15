@@ -14,6 +14,7 @@ use super::{
     GatewayError,
     PresenceData,
     ReconnectType,
+    ResumeInfo,
     ShardAction,
     WsClient,
 };
@@ -67,6 +68,8 @@ pub struct Shard {
     last_heartbeat_acknowledged: bool,
     seq: u64,
     session_id: Option<String>,
+    /// Where to reconnect to resume the session; Discord names it in READY.
+    resume_gateway_url: Option<String>,
     info: ShardInfo,
     stage: ConnectionStage,
     /// Instant of when the shard was started.
@@ -107,7 +110,7 @@ impl Shard {
     ///
     /// // retrieve the gateway response, which contains the URL to connect to
     /// let gateway = Arc::new(Mutex::new(http.get_gateway().await?.url));
-    /// let shard = Shard::new(gateway, &token, shard_info, GatewayIntents::all(), None).await?;
+    /// let shard = Shard::new(gateway, &token, shard_info, GatewayIntents::all(), None, None).await?;
     ///
     /// // at this point, you can create a `loop`, and receive events and match
     /// // their variants
@@ -125,8 +128,12 @@ impl Shard {
         info: ShardInfo,
         intents: GatewayIntents,
         presence: Option<PresenceData>,
+        resume: Option<ResumeInfo>,
     ) -> Result<Shard> {
-        let url = ws_url.lock().await.clone();
+        let url = match &resume {
+            Some(resume) => resume.resume_gateway_url.clone(),
+            None => ws_url.lock().await.clone(),
+        };
         let client = connect(&url).await?;
 
         let presence = presence.unwrap_or_default();
@@ -134,9 +141,11 @@ impl Shard {
         let last_heartbeat_ack = None;
         let heartbeat_interval = None;
         let last_heartbeat_acknowledged = true;
-        let seq = 0;
         let stage = ConnectionStage::Handshake;
-        let session_id = None;
+        let (session_id, seq, resume_gateway_url) = match resume {
+            Some(r) => (Some(r.session_id), r.seq, Some(r.resume_gateway_url)),
+            None => (None, 0, None),
+        };
 
         Ok(Shard {
             client,
@@ -151,10 +160,21 @@ impl Shard {
             started: Instant::now(),
             token: token.to_string(),
             session_id,
+            resume_gateway_url,
             info,
             ws_url,
             intents,
         })
+    }
+
+    /// Returns the point a new process could resume this shard's session from, once a session
+    /// exists.
+    #[must_use]
+    pub fn resume_info(&self) -> Option<ResumeInfo> {
+        let session_id = self.session_id.clone()?;
+        let resume_gateway_url = self.resume_gateway_url.clone()?;
+
+        Some(ResumeInfo::new(session_id, self.seq, resume_gateway_url))
     }
 
     /// Sets a callback to be called when the gateway receives the application's ID from Discord.
@@ -287,6 +307,7 @@ impl Shard {
                 debug!("[{:?}] Received Ready", self.info);
 
                 self.session_id = Some(ready.ready.session_id.clone());
+                self.resume_gateway_url = Some(ready.ready.resume_gateway_url.clone());
                 self.stage = ConnectionStage::Connected;
 
                 if let Some(callback) = self.application_id_callback.take() {
@@ -438,7 +459,11 @@ impl Shard {
                 self.heartbeat_interval = Some(std::time::Duration::from_millis(interval));
 
                 Ok(Some(if self.stage == ConnectionStage::Handshake {
-                    ShardAction::Identify
+                    if self.session_id.is_some() {
+                        ShardAction::Resume
+                    } else {
+                        ShardAction::Identify
+                    }
                 } else {
                     debug!("[{:?}] Received late Hello; autoreconnecting", self.info);
 
@@ -586,7 +611,7 @@ impl Shard {
     /// #          total: 1,
     /// #     };
     /// #
-    /// #     let mut shard = Shard::new(mutex.clone(), "", shard_info, GatewayIntents::all(), None).await?;
+    /// #     let mut shard = Shard::new(mutex.clone(), "", shard_info, GatewayIntents::all(), None, None).await?;
     /// #
     /// use serenity::model::id::GuildId;
     ///
@@ -613,7 +638,7 @@ impl Shard {
     /// #          id: ShardId(0),
     /// #          total: 1,
     /// #     };
-    /// #     let mut shard = Shard::new(mutex.clone(), "", shard_info, GatewayIntents::all(), None).await?;
+    /// #     let mut shard = Shard::new(mutex.clone(), "", shard_info, GatewayIntents::all(), None, None).await?;
     /// #
     /// use serenity::model::id::GuildId;
     ///
@@ -705,8 +730,11 @@ impl Shard {
         // Hello is received.
         self.stage = ConnectionStage::Connecting;
         self.started = Instant::now();
-        let url = &self.ws_url.lock().await.clone();
-        let client = connect(url).await?;
+        let url = match (&self.session_id, &self.resume_gateway_url) {
+            (Some(_), Some(resume_url)) => resume_url.clone(),
+            _ => self.ws_url.lock().await.clone(),
+        };
+        let client = connect(&url).await?;
         self.stage = ConnectionStage::Handshake;
 
         Ok(client)
@@ -719,6 +747,7 @@ impl Shard {
         self.heartbeat_interval = None;
         self.last_heartbeat_acknowledged = true;
         self.session_id = None;
+        self.resume_gateway_url = None;
         self.stage = ConnectionStage::Disconnected;
         self.seq = 0;
     }
@@ -731,6 +760,17 @@ impl Shard {
         debug!("[{:?}] Attempting to resume", self.info);
 
         self.client = self.initialize().await?;
+        self.resume_current().await
+    }
+
+    /// Sends a RESUME over the current connection, which must have just received a HELLO.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GatewayError::NoSessionId`] if the shard has no session to resume, or errors if
+    /// there is a problem with the WS connection.
+    #[instrument(skip(self))]
+    pub async fn resume_current(&mut self) -> Result<()> {
         self.stage = ConnectionStage::Resuming;
 
         match &self.session_id {
