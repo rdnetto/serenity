@@ -1,7 +1,12 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use futures::channel::mpsc::{self, UnboundedReceiver as Receiver, UnboundedSender as Sender};
+use futures::channel::mpsc::{
+    self,
+    TryRecvError,
+    UnboundedReceiver as Receiver,
+    UnboundedSender as Sender,
+};
 use tokio::sync::RwLock;
 use tokio_tungstenite::tungstenite;
 use tokio_tungstenite::tungstenite::error::Error as TungsteniteError;
@@ -361,13 +366,13 @@ impl ShardRunner {
     #[instrument(skip(self))]
     async fn recv(&mut self) -> bool {
         loop {
-            match self.runner_rx.try_next() {
-                Ok(Some(value)) => {
+            match self.runner_rx.try_recv() {
+                Ok(value) => {
                     if !self.handle_rx_value(value).await {
                         return false;
                     }
                 },
-                Ok(None) => {
+                Err(TryRecvError::Closed) => {
                     warn!(
                         "[ShardRunner {:?}] Sending half DC; restarting",
                         self.shard.shard_info(),
@@ -376,7 +381,7 @@ impl ShardRunner {
                     self.request_restart().await;
                     return false;
                 },
-                Err(_) => break,
+                Err(TryRecvError::Empty) => break,
             }
         }
 
