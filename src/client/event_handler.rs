@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use super::context::Context;
-use crate::gateway::ShardStageUpdateEvent;
+use crate::gateway::{ResumeInfo, ShardStageUpdateEvent};
 use crate::http::RatelimitInfo;
 use crate::model::prelude::*;
 
@@ -507,4 +507,15 @@ event_handler! {
 pub trait RawEventHandler: Send + Sync {
     /// Dispatched when any event occurs
     async fn raw_event(&self, _ctx: Context, _ev: Event) {}
+
+    /// Dispatched when any event occurs, with the point to resume from once this event has been
+    /// handled.
+    ///
+    /// Defaults to calling [`Self::raw_event`]; implement this instead to persist sessions for
+    /// [`ClientBuilder::resume_sessions`].
+    ///
+    /// [`ClientBuilder::resume_sessions`]: super::ClientBuilder::resume_sessions
+    async fn raw_event_with_resume_info(&self, ctx: Context, _resume_info: ResumeInfo, ev: Event) {
+        self.raw_event(ctx, ev).await;
+    }
 }

@@ -9,6 +9,7 @@ use super::{Context, FullEvent};
 use crate::cache::{Cache, CacheUpdate};
 #[cfg(feature = "framework")]
 use crate::framework::Framework;
+use crate::gateway::ResumeInfo;
 use crate::internal::tokio::spawn_named;
 use crate::model::channel::ChannelType;
 use crate::model::event::Event;
@@ -42,8 +43,10 @@ macro_rules! update_cache {
     ($cache:ident, $event:ident) => {};
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub(crate) fn dispatch_model(
     event: Event,
+    resume_info: Option<ResumeInfo>,
     context: &Context,
     #[cfg(feature = "framework")] framework: Option<Arc<dyn Framework>>,
     event_handlers: Vec<Arc<dyn EventHandler>>,
@@ -51,7 +54,15 @@ pub(crate) fn dispatch_model(
 ) {
     for raw_handler in raw_event_handlers {
         let (context, event) = (context.clone(), event.clone());
-        tokio::spawn(async move { raw_handler.raw_event(context, event).await });
+        let resume_info = resume_info.clone();
+        tokio::spawn(async move {
+            match resume_info {
+                Some(resume_info) => {
+                    raw_handler.raw_event_with_resume_info(context, resume_info, event).await;
+                },
+                None => raw_handler.raw_event(context, event).await,
+            }
+        });
     }
 
     let full_events = update_cache_with_event(
