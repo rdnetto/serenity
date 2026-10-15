@@ -165,7 +165,7 @@ impl ShardQueuer {
     async fn start(&mut self, id: ShardId, total: u32) -> Result<()> {
         let shard_info = ShardInfo::new(id, total);
 
-        let resume = self.resume_sessions.remove(&id);
+        let resume = self.resume_sessions.get(&id).cloned();
 
         let mut shard = Shard::new(
             Arc::clone(&self.ws_url),
@@ -176,6 +176,9 @@ impl ShardQueuer {
             resume,
         )
         .await?;
+
+        // Removing only after a successful connect lets a retried start resume again.
+        self.resume_sessions.remove(&id);
 
         let cloned_http = Arc::clone(&self.http);
         shard.set_application_id_callback(move |id| cloned_http.set_application_id(id));
