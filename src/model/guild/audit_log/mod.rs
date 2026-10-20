@@ -345,8 +345,8 @@ pub struct AuditLogEntry {
     pub action: Action,
     /// What was the reasoning by doing an action on a target? If there was one.
     pub reason: Option<String>,
-    /// The user that did this action on a target.
-    pub user_id: UserId,
+    /// The user or app that did this action on a target; Discord may omit it.
+    pub user_id: Option<UserId>,
     /// What changes were made.
     pub changes: Option<Vec<Change>>,
     /// The id of this entry.
