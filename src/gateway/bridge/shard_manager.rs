@@ -303,20 +303,25 @@ impl ShardManager {
     /// [`Self::shutdown`] method.
     #[instrument(skip(self))]
     pub async fn shutdown_all(&self) {
-        let keys = {
-            let runners = self.runners.lock().await;
+        if self.runners.lock().await.is_empty() {
+            return;
+        }
 
-            if runners.is_empty() {
-                return;
-            }
+        self.shutdown_all_with_code(1000).await;
+    }
 
-            runners.keys().copied().collect::<Vec<_>>()
-        };
+    /// Like [`Self::shutdown_all`], but closes each shard with `code` and stops the shard queuer
+    /// even when no shard is running, which releases the handlers the queuer holds.
+    ///
+    /// Code 4000 keeps sessions resumable, while 1000 ends them.
+    #[instrument(skip(self))]
+    pub async fn shutdown_all_with_code(&self, code: u16) {
+        let keys = self.runners.lock().await.keys().copied().collect::<Vec<_>>();
 
         info!("Shutting down all shards");
 
         for shard_id in keys {
-            self.shutdown(shard_id, 1000).await;
+            self.shutdown(shard_id, code).await;
         }
 
         drop(self.shard_queuer.unbounded_send(ShardQueuerMessage::Shutdown));
